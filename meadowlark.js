@@ -1,5 +1,8 @@
 const express = require('express')
 const expressHandlebars = require('express-handlebars')
+const bodyParser = require('body-parser')
+const multiparty = require('multiparty')
+const handlers = require('./lib/handlers')
 
 const app = express()
 
@@ -11,30 +14,50 @@ app.set('view engine', 'handlebars')
 
 const port = process.env.PORT || 3000
 
-app.get('/', (req, res) => {
-  res.type('text/plain')
-  res.send('Meadowlark Travel')
+app.use(express.static(__dirname + '/public'))
+
+app.use(bodyParser.json())
+
+app.use(bodyParser.urlencoded({extended: true}))
+
+app.get('/', handlers.home)
+
+app.get('/about', handlers.about)
+
+app.get('/newsletter', handlers.newsletter)
+
+app.get('/newsletter-signup', handlers.newsletterSignup)
+
+app.post('/newsletter-signup', handlers.api.newsletterSignup)
+
+app.post('/newsletter-signup/process', handlers.newsletterSignupProcess)
+
+app.get('/newsletter-signup/thank-you', handlers.newsletterSignupThankYou)
+
+app.post('/contest/vacation-photo/:year/:month', (req, res) => {
+  const form = new multiparty.Form()
+  form.parse(req, (err, fields, files) => {
+    if(err) return res.status(500).send({error: err.message})
+    handlers.vacationPhotoContestProcess(req, res, fields, files)
+  })
 })
 
-app.get('/about', (req, res) => {
+//info sent to the browser via request header
+app.get('/headers', (req, res) => {
   res.type('text/plain')
-  res.send('About Meadowlark Travel')
+  const headers = Object.entries(req.headers)
+    .map(([key, value]) => `${key}: ${value}`)
+  res.send(headers.join('\n'))
 })
 
 //custom 404 page
-app.use((req, res) => {
-  res.type('text/plain')
-  res.status(404)
-  res.send('404 - Not Found')
-})
+app.use(handlers.notFound)
 
 // custom 500 page
-app.use((err, req, res, next) => {
-  console.error(err.message)
-  res.type('text/plain')
-  res.status(500)
-  res.send('500 - Server Error')
-})
+app.use(handlers.serverError)
+
+//hiding server info from response headers
+app.disable('x-powered-by')
 
 app.listen(port, () => console.log(
   `Express started on http://localhost:${port}; ` +
